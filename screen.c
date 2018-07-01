@@ -272,6 +272,7 @@ screen_resize_y(struct screen *s, u_int sy)
 		if (gd->flags & GRID_HISTORY) {
 			gd->hscrolled += needed;
 			gd->hsize += needed;
+			log_debug("screen.c %d: new hsize: %d\n", __LINE__, gd->hsize);
 		} else if (needed > 0 && available > 0) {
 			if (available > needed)
 				available = needed;
@@ -297,6 +298,7 @@ screen_resize_y(struct screen *s, u_int sy)
 				available = needed;
 			gd->hscrolled -= available;
 			gd->hsize -= available;
+			log_debug("screen.c %d: new hsize: %d\n", __LINE__, gd->hsize);
 			s->cy += available;
 		} else
 			available = 0;
