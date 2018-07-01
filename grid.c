@@ -145,6 +145,19 @@ grid_extended_cell(struct grid_line *gl, struct grid_cell_entry *gce,
 	return (gcp);
 }
 
+struct grid_line *
+grid_get_linedata(struct grid *gd, u_int line)
+{
+	return &gd->linedata[line];
+}
+
+void
+grid_realloc_linedata(struct grid *gd, uint total_nr_lines)
+{
+	gd->linedata = xreallocarray(gd->linedata, total_nr_lines,
+				      sizeof *gd->linedata);
+}
+
 /* Copy default into a cell. */
 static void
 grid_clear_cell(struct grid *gd, u_int px, u_int py, u_int bg)
