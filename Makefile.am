@@ -191,6 +191,9 @@ if HAVE_UTF8PROC
 nodist_tmux_SOURCES += compat/utf8proc.c
 endif
 
+check-syntax:
+	$(COMPILE) -fsyntax-only ${CHK_SOURCES} -c
+
 # Install tmux.1 in the right format.
 install-exec-hook:
 	if test x@MANFORMAT@ = xmdoc; then \
