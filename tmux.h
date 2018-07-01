@@ -591,6 +591,17 @@ struct grid_line {
 } __packed;
 
 /* Entire grid of cells. */
+struct grid_block {
+	u_int			 sx;
+	u_int			 block_size;
+
+	struct grid_line	*linedata;
+
+	TAILQ_ENTRY(grid_block)  entry;
+};
+TAILQ_HEAD(grid_blocks, grid_block);
+
+/* Entire grid of cells. */
 struct grid {
 	int			 flags;
 #define GRID_HISTORY 0x1 /* scroll lines into history */
@@ -600,9 +611,10 @@ struct grid {
 
 	u_int			 hscrolled;
 	u_int			 hsize;
+	u_int			 hallocated;
 	u_int			 hlimit;
 
-	struct grid_line	*linedata;
+	struct grid_blocks	 blocks;
 };
 
 /* Hook data structures. */
