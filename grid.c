@@ -44,6 +44,9 @@ static const struct grid_cell_entry grid_default_entry = {
 };
 
 static void	grid_empty_line(struct grid *, u_int, u_int);
+static struct grid_block * grid_block_reflow(
+	struct grid_block *gb, u_int sx, u_int **yfixups);
+
 
 /* Store cell in entry. */
 static void
@@ -224,11 +227,55 @@ grid_get_block(struct grid *gd, u_int *py, struct grid_block_get_cache *cache)
 	return NULL;
 }
 
+static void
+grid_reflow_complete(struct grid *gd)
+{
+	struct grid_block	*gb;
+	u_int			*yfixups[1], **yfixup;
+	struct grid_block	 *new_gb;
+
+	gd->reflowing = 1;
+
+	TAILQ_FOREACH(gb, &gd->blocks, entry) {
+		if (!gb->need_reflow)
+			continue;
+
+		yfixup = &yfixups[0];
+		*yfixup = NULL;
+
+		new_gb = grid_block_reflow(gb, gb->sx, yfixups);
+
+		/*
+		 * Relocate the new block content to our old one,
+		 * and free its descriptor.
+		 */
+		free(gb->linedata);
+		gd->hsize += new_gb->block_size - gb->block_size;
+		gd->hallocated += new_gb->block_size - gb->block_size;
+		gb->linedata = new_gb->linedata;
+		gb->block_size = new_gb->block_size;
+		gb->need_reflow = 0;
+		free(new_gb);
+	}
+
+	gd->reflowing = 0;
+}
+
 struct grid_line *
 grid_get_linedata(struct grid *gd, u_int py)
 {
-	u_int			by = py;
-	struct grid_block	*gb = grid_get_block(gd, &by, NULL);
+	u_int			by;
+	struct grid_block	*gb;
+
+	if (!gd->reflowing) {
+		by = py;
+		gb = grid_get_block(gd, &by, NULL);
+		if (gb->need_reflow)
+			grid_reflow_complete(gd);
+	}
+
+	by = py;
+	gb = grid_get_block(gd, &by, NULL);
 
 	return &gb->linedata[by];
 }
@@ -241,6 +288,7 @@ grid_block_new(int sx)
 	gb = xmalloc(sizeof *gb);
 	gb->sx = sx;
 	gb->block_size = 0;
+	gb->need_reflow = 0;
 	gb->linedata = NULL;
 
 	return gb;
@@ -485,6 +533,7 @@ grid_create(u_int sx, u_int sy, u_int hlimit)
 	gd->hallocated = 0;
 	gd->hscrolled = 0;
 	gd->hsize = 0;
+	gd->reflowing = 0;
 	gd->hlimit = hlimit;
 
 	TAILQ_INIT(&gd->blocks);
@@ -1642,8 +1691,15 @@ grid_reflow(struct grid *gd, u_int sx, u_int *cursor)
 	offset = 0;
 	reflow_offset = 0;
 	rev_hscrolled = total - gd->hscrolled;
+	gd->reflowing = 1;
 
 	TAILQ_FOREACH_REVERSE(gb, &gd->blocks, grid_blocks, entry) {
+		if (reflow_offset > gd->sy) {
+			gb->need_reflow = 1;
+			gb->sx = sx;
+			continue;
+		}
+
 		/* Register yoffsets for fixup lists */
 		yfixup = &yfixups[0];
 
@@ -1714,6 +1770,7 @@ grid_reflow(struct grid *gd, u_int sx, u_int *cursor)
 		*cursor = 0;
 	else
 		*cursor = gd->sy - 1 - cy;
+	gd->reflowing = 0;
 
 	log_debug("grid %p: sx=%d sy=%d hscrolled=%d hsize=%d hlimit=%d\n",
 		  gd,

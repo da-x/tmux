@@ -594,6 +594,7 @@ struct grid_line {
 struct grid_block {
 	u_int			 sx;
 	u_int			 block_size;
+	u_int                    need_reflow;
 
 	struct grid_line	*linedata;
 
@@ -608,6 +609,7 @@ struct grid {
 
 	u_int			 sx;
 	u_int			 sy;
+	u_int                    reflowing;
 
 	u_int			 hscrolled;
 	u_int			 hsize;
