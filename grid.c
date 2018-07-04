@@ -227,12 +227,45 @@ grid_get_block(struct grid *gd, u_int *py, struct grid_block_get_cache *cache)
 	return NULL;
 }
 
+/* Add lines, return the first new one. */
+static struct grid_line *
+grid_block_reflow_add(struct grid_block *gb, u_int n)
+{
+	struct grid_line	*gl;
+	u_int			 sy = gb->block_size + n;
+
+	gb->linedata = xreallocarray(gb->linedata, sy, sizeof *gb->linedata);
+	gl = &gb->linedata[gb->block_size];
+	memset(gl, 0, n * (sizeof *gl));
+	gb->block_size = sy;
+
+	return (gl);
+}
+
+static void
+grid_reflow_apply_hsize_diff(struct grid *gd, int hsize_diff)
+{
+	struct grid_block	*gb;
+
+	if (hsize_diff < 0  &&  (u_int)-hsize_diff > gd->hsize) {
+		gd->hsize = 0;
+		if (!TAILQ_EMPTY(&gd->blocks)) {
+			gb = TAILQ_LAST(&gd->blocks, grid_blocks);
+			grid_block_reflow_add(gb, (u_int)-hsize_diff);
+			gd->hallocated += (u_int)-hsize_diff;
+		}
+	} else {
+		gd->hsize += hsize_diff;
+	}
+}
+
 static void
 grid_reflow_complete(struct grid *gd)
 {
 	struct grid_block	*gb;
 	u_int			*yfixups[1], **yfixup;
 	struct grid_block	 *new_gb;
+	int			hsize_diff = 0;
 
 	gd->reflowing = 1;
 
@@ -250,7 +283,7 @@ grid_reflow_complete(struct grid *gd)
 		 * and free its descriptor.
 		 */
 		free(gb->linedata);
-		gd->hsize += new_gb->block_size - gb->block_size;
+		hsize_diff += new_gb->block_size - gb->block_size;
 		gd->hallocated += new_gb->block_size - gb->block_size;
 		gb->linedata = new_gb->linedata;
 		gb->block_size = new_gb->block_size;
@@ -258,6 +291,7 @@ grid_reflow_complete(struct grid *gd)
 		free(new_gb);
 	}
 
+	grid_reflow_apply_hsize_diff(gd, hsize_diff);
 	gd->reflowing = 0;
 }
 
@@ -443,7 +477,7 @@ grid_trim_history(struct grid *gd, uint nr_to_remove)
 			gd->hallocated -= gb->block_size;
 			nr_to_remove -= gb->block_size;
 			grid_block_free(gb);
-			break;
+			continue;
 		}
 
 		remaining = gb->block_size - nr_to_remove;
@@ -1380,21 +1414,6 @@ grid_reflow_dead(struct grid_line *gl)
 	gl->flags = GRID_LINE_DEAD;
 }
 
-/* Add lines, return the first new one. */
-static struct grid_line *
-grid_block_reflow_add(struct grid_block *gb, u_int n)
-{
-	struct grid_line	*gl;
-	u_int			 sy = gb->block_size + n;
-
-	gb->linedata = xreallocarray(gb->linedata, sy, sizeof *gb->linedata);
-	gl = &gb->linedata[gb->block_size];
-	memset(gl, 0, n * (sizeof *gl));
-	gb->block_size = sy;
-
-	return (gl);
-}
-
 /* Move a line across. */
 static struct grid_line *
 grid_block_reflow_move(struct grid_block *gb, struct grid_line *from)
@@ -1672,6 +1691,7 @@ grid_reflow(struct grid *gd, u_int sx, u_int *cursor)
 	u_int			 cy, offset, reflow_offset, rev_hscrolled;
 	u_int                    cy_delta = 0, hscrolled_delta = 0;
 	u_int                    cy_fixed = 0, hscrolled_fixed = 0;
+	int			 hsize_diff = 0;
 	struct timeval		 start, tv;
 	struct grid_block	*gb, *new_gb;
 	u_int                    *yfixups[3], **yfixup;
@@ -1751,7 +1771,7 @@ grid_reflow(struct grid *gd, u_int sx, u_int *cursor)
 		free(gb->linedata);
 		offset += gb->block_size;
 		reflow_offset += new_gb->block_size;
-		gd->hsize += new_gb->block_size - gb->block_size;
+		hsize_diff += new_gb->block_size - gb->block_size;
 		gd->hallocated += new_gb->block_size - gb->block_size;
 		log_debug("%d: new hsize: %d\n", __LINE__, gd->hsize);
 		gb->linedata = new_gb->linedata;
@@ -1760,13 +1780,15 @@ grid_reflow(struct grid *gd, u_int sx, u_int *cursor)
 		free(new_gb);
 	}
 
+	grid_reflow_apply_hsize_diff(gd, hsize_diff);
+
 	/*
 	 * Update scrolled and cursor positions.
 	 */
 	if (gd->hscrolled > gd->hsize)
 		gd->hscrolled = gd->hsize;
 
-	if (cy > gd->sy)
+	if (cy >= gd->sy)
 		*cursor = 0;
 	else
 		*cursor = gd->sy - 1 - cy;
