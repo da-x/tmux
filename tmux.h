@@ -591,32 +591,21 @@ struct grid_line {
 } __packed;
 
 /* Entire grid of cells. */
-struct grid_block {
-	u_int			 sx;
-	u_int			 block_size;
-	u_int                    need_reflow;
-
-	struct grid_line	*linedata;
-
-	TAILQ_ENTRY(grid_block)  entry;
-};
-TAILQ_HEAD(grid_blocks, grid_block);
-
-/* Entire grid of cells. */
+struct grid_blocks;
 struct grid {
 	int			 flags;
-#define GRID_HISTORY 0x1 /* scroll lines into history */
+#define GRID_HISTORY 0x1   /* scroll lines into history */
+#define GRID_REFLOWING 0x2 /* currently reflowing */
 
 	u_int			 sx;
 	u_int			 sy;
-	u_int                    reflowing;
 
 	u_int			 hscrolled;
 	u_int			 hsize;
 	u_int			 hallocated;
 	u_int			 hlimit;
 
-	struct grid_blocks	 blocks;
+	struct grid_blocks	*blocks;
 };
 
 /* Hook data structures. */

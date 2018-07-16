@@ -47,6 +47,17 @@ static void	grid_empty_line(struct grid *, u_int, u_int);
 static struct grid_block * grid_block_reflow(
 	struct grid_block *gb, u_int sx, u_int **yfixups);
 
+/* Block of lines. */
+struct grid_block {
+	u_int			 sx;
+	u_int			 block_size;
+	int			 need_reflow;
+
+	struct grid_line	*linedata;
+
+	TAILQ_ENTRY(grid_block)	 entry;
+};
+TAILQ_HEAD(grid_blocks, grid_block);
 
 /* Store cell in entry. */
 static void
@@ -162,7 +173,7 @@ grid_validate(struct grid *gd)
 	struct grid_block	*gb;
 	uint total = 0;
 
-	TAILQ_FOREACH(gb, &gd->blocks, entry) {
+	TAILQ_FOREACH(gb, gd->blocks, entry) {
 		log_debug("%s: gd %p block [%p], size %d",
 			  __func__, gd, gb, gb->block_size);
 		total += gb->block_size;
@@ -195,7 +206,7 @@ grid_get_block(struct grid *gd, u_int *py, struct grid_block_get_cache *cache)
 	if (*py < total / 2) {
 		offset = 0;
 
-		TAILQ_FOREACH(gb, &gd->blocks, entry) {
+		TAILQ_FOREACH(gb, gd->blocks, entry) {
 			if (offset <= *py && *py < offset + gb->block_size) {
 				*py -= offset;
 				if (cache) {
@@ -210,7 +221,7 @@ grid_get_block(struct grid *gd, u_int *py, struct grid_block_get_cache *cache)
 	} else {
 		offset = total;
 
-		TAILQ_FOREACH_REVERSE(gb, &gd->blocks, grid_blocks, entry) {
+		TAILQ_FOREACH_REVERSE(gb, gd->blocks, grid_blocks, entry) {
 			offset -= gb->block_size;
 
 			if (offset <= *py && *py < offset + gb->block_size) {
@@ -249,8 +260,8 @@ grid_reflow_apply_hsize_diff(struct grid *gd, int hsize_diff)
 
 	if (hsize_diff < 0  &&  (u_int)-hsize_diff > gd->hsize) {
 		gd->hsize = 0;
-		if (!TAILQ_EMPTY(&gd->blocks)) {
-			gb = TAILQ_LAST(&gd->blocks, grid_blocks);
+		if (!TAILQ_EMPTY(gd->blocks)) {
+			gb = TAILQ_LAST(gd->blocks, grid_blocks);
 			grid_block_reflow_add(gb, (u_int)-hsize_diff);
 			gd->hallocated += (u_int)-hsize_diff;
 		}
@@ -267,9 +278,9 @@ grid_reflow_complete(struct grid *gd)
 	struct grid_block	 *new_gb;
 	int			hsize_diff = 0;
 
-	gd->reflowing = 1;
+	gd->flags |= GRID_REFLOWING;
 
-	TAILQ_FOREACH(gb, &gd->blocks, entry) {
+	TAILQ_FOREACH(gb, gd->blocks, entry) {
 		if (!gb->need_reflow)
 			continue;
 
@@ -292,16 +303,17 @@ grid_reflow_complete(struct grid *gd)
 	}
 
 	grid_reflow_apply_hsize_diff(gd, hsize_diff);
-	gd->reflowing = 0;
+	gd->flags &= ~GRID_REFLOWING;
 }
 
+/* Get line data. */
 struct grid_line *
 grid_get_line(struct grid *gd, u_int line)
 {
 	u_int			by;
 	struct grid_block	*gb;
 
-	if (!gd->reflowing) {
+	if (~gd->flags & GRID_REFLOWING) {
 		by = line;
 		gb = grid_get_block(gd, &by, NULL);
 		if (gb->need_reflow)
@@ -314,27 +326,26 @@ grid_get_line(struct grid *gd, u_int line)
 	return (&gb->linedata[by]);
 }
 
+/* Allocate a new block. */
 static struct grid_block *
 grid_block_new(int sx)
 {
 	struct grid_block	*gb;
 
-	gb = xmalloc(sizeof *gb);
+	gb = xcalloc(1, sizeof *gb);
 	gb->sx = sx;
-	gb->block_size = 0;
-	gb->need_reflow = 0;
-	gb->linedata = NULL;
 
-	return gb;
+	return (gb);
 }
 
+/* Append a new empty block. */
 static void
-grid_append_new_empty_block(struct grid *gd)
+grid_block_append(struct grid *gd)
 {
 	struct grid_block	*gb;
 
 	gb = grid_block_new(gd->sx);
-	TAILQ_INSERT_TAIL(&gd->blocks, gb, entry);
+	TAILQ_INSERT_TAIL(gd->blocks, gb, entry);
 }
 
 /* Free one line. */
@@ -347,7 +358,7 @@ grid_line_free(struct grid_line *gl)
 	gl->extddata = NULL;
 }
 
-/* Free one line. */
+/* Free one line in a block. */
 static void
 grid_block_free_line(struct grid_block *gb, u_int py)
 {
@@ -364,6 +375,7 @@ grid_block_free_lines(struct grid_block *gb, u_int py, u_int ny)
 		grid_block_free_line(gb, yy);
 }
 
+/* Free a block. */
 static void
 grid_block_free(struct grid_block *gb)
 {
@@ -385,12 +397,7 @@ grid_free_lines(struct grid *gd, u_int py, u_int ny)
 	}
 }
 
-/*
- * Resize the grid according to the total number of lines.
- *
- * Note: Does not update gd->hsize and gd->sy - that's for the caller to decide
- * how.
- */
+/* Resize the grid. This does not update gd->hsize and gd->sy. */
 void
 grid_adjust_lines(struct grid *gd, u_int lines)
 {
@@ -401,14 +408,14 @@ grid_adjust_lines(struct grid *gd, u_int lines)
 	grid_validate(gd);
 
 	while (lines > total) {
-		if (TAILQ_EMPTY(&gd->blocks)) {
-			grid_append_new_empty_block(gd);
+		if (TAILQ_EMPTY(gd->blocks)) {
+			grid_block_append(gd);
 			continue;
 		}
 
-		gb = TAILQ_LAST(&gd->blocks, grid_blocks);
+		gb = TAILQ_LAST(gd->blocks, grid_blocks);
 		if (gb->block_size >= MAX_BLOCK_LINES) {
-			grid_append_new_empty_block(gd);
+			grid_block_append(gd);
 			continue;
 		}
 
@@ -427,14 +434,14 @@ grid_adjust_lines(struct grid *gd, u_int lines)
 	}
 
 	while (lines < total) {
-		if (TAILQ_EMPTY(&gd->blocks))
+		if (TAILQ_EMPTY(gd->blocks))
 			break;
 
-		gb = TAILQ_LAST(&gd->blocks, grid_blocks);
+		gb = TAILQ_LAST(gd->blocks, grid_blocks);
 
 		size_to_remove = total - lines;
 		if (size_to_remove >= gb->block_size) {
-			TAILQ_REMOVE(&gd->blocks, gb, entry);
+			TAILQ_REMOVE(gd->blocks, gb, entry);
 			total -= gb->block_size;
 
 			grid_block_free(gb);
@@ -452,46 +459,6 @@ grid_adjust_lines(struct grid *gd, u_int lines)
 	}
 
 	gd->hallocated = total;
-	grid_validate(gd);
-}
-
-/*
- * Trim the history from the end, remove `nr_to_remove` lines from it.
- *
- * Note: Does not update gd->hsize and gd->sy - that's for the caller to decide
- * how.
- */
-static void
-grid_trim_history(struct grid *gd, uint nr_to_remove)
-{
-	uint			remaining;
-	struct grid_block	*gb;
-
-	while (nr_to_remove > 0) {
-		if (TAILQ_EMPTY(&gd->blocks))
-			break;
-
-		gb = TAILQ_FIRST(&gd->blocks);
-		if (gb->block_size <= nr_to_remove) {
-			TAILQ_REMOVE(&gd->blocks, gb, entry);
-			gd->hallocated -= gb->block_size;
-			nr_to_remove -= gb->block_size;
-			grid_block_free(gb);
-			continue;
-		}
-
-		remaining = gb->block_size - nr_to_remove;
-
-		grid_block_free_lines(gb, 0, nr_to_remove);
-		memmove(&gb->linedata[0], &gb->linedata[nr_to_remove],
-			(remaining) * (sizeof *gb->linedata));
-		gb->linedata = xreallocarray(
-			gb->linedata, remaining, sizeof *gb->linedata);
-		gb->block_size -= nr_to_remove;
-		gd->hallocated -= nr_to_remove;
-		break;
-	}
-
 	grid_validate(gd);
 }
 
@@ -558,19 +525,16 @@ grid_create(u_int sx, u_int sy, u_int hlimit)
 {
 	struct grid	*gd;
 
-	gd = xmalloc(sizeof *gd);
+	gd = xcalloc(1, sizeof *gd);
 	gd->sx = sx;
 	gd->sy = 0;
 
 	gd->flags = GRID_HISTORY;
 
-	gd->hallocated = 0;
-	gd->hscrolled = 0;
-	gd->hsize = 0;
-	gd->reflowing = 0;
 	gd->hlimit = hlimit;
 
-	TAILQ_INIT(&gd->blocks);
+	gd->blocks = xcalloc(1, sizeof *gd->blocks);
+	TAILQ_INIT(gd->blocks);
 
 	grid_adjust_lines(gd, sy);
 
@@ -585,11 +549,11 @@ grid_destroy(struct grid *gd)
 {
 	struct grid_block	*gb, *gb1;
 
-	TAILQ_FOREACH_SAFE(gb, &gd->blocks, entry, gb1) {
-		TAILQ_REMOVE(&gd->blocks, gb, entry);
-
+	TAILQ_FOREACH_SAFE(gb, gd->blocks, entry, gb1) {
+		TAILQ_REMOVE(gd->blocks, gb, entry);
 		grid_block_free(gb);
 	}
+	free(gd->blocks);
 
 	free(gd);
 }
@@ -619,6 +583,41 @@ grid_compare(struct grid *ga, struct grid *gb)
 	}
 
 	return (0);
+}
+
+/* Trim lines from the history. */
+static void
+grid_trim_history(struct grid *gd, u_int ny)
+{
+	uint			remaining;
+	struct grid_block	*gb;
+
+	while (ny > 0) {
+		if (TAILQ_EMPTY(gd->blocks))
+			break;
+
+		gb = TAILQ_FIRST(gd->blocks);
+		if (gb->block_size <= ny) {
+			TAILQ_REMOVE(gd->blocks, gb, entry);
+			gd->hallocated -= gb->block_size;
+			ny -= gb->block_size;
+			grid_block_free(gb);
+			continue;
+		}
+
+		remaining = gb->block_size - ny;
+
+		grid_block_free_lines(gb, 0, ny);
+		memmove(&gb->linedata[0], &gb->linedata[ny],
+			(remaining) * (sizeof *gb->linedata));
+		gb->linedata = xreallocarray(
+			gb->linedata, remaining, sizeof *gb->linedata);
+		gb->block_size -= ny;
+		gd->hallocated -= ny;
+		break;
+	}
+
+	grid_validate(gd);
 }
 
 /*
@@ -1711,9 +1710,9 @@ grid_reflow(struct grid *gd, u_int sx, u_int *cursor)
 	offset = 0;
 	reflow_offset = 0;
 	rev_hscrolled = total - gd->hscrolled;
-	gd->reflowing = 1;
+	gd->flags |= GRID_REFLOWING;
 
-	TAILQ_FOREACH_REVERSE(gb, &gd->blocks, grid_blocks, entry) {
+	TAILQ_FOREACH_REVERSE(gb, gd->blocks, grid_blocks, entry) {
 		if (reflow_offset > gd->sy) {
 			gb->need_reflow = 1;
 			gb->sx = sx;
@@ -1792,7 +1791,7 @@ grid_reflow(struct grid *gd, u_int sx, u_int *cursor)
 		*cursor = 0;
 	else
 		*cursor = gd->sy - 1 - cy;
-	gd->reflowing = 0;
+	gd->flags &= ~GRID_REFLOWING;
 
 	log_debug("grid %p: sx=%d sy=%d hscrolled=%d hsize=%d hlimit=%d\n",
 		  gd,
