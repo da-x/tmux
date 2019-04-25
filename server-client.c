@@ -544,12 +544,12 @@ have_event:
 		/* Try the pane borders if not zoomed. */
 		if (~s->curw->window->flags & WINDOW_ZOOMED) {
 			TAILQ_FOREACH(wp, &s->curw->window->panes, entry) {
-				if ((wp->xoff + wp->sx == px &&
+				if ((wp->xoff + wp->fx == px &&
 				    wp->yoff <= 1 + py &&
-				    wp->yoff + wp->sy >= py) ||
-				    (wp->yoff + wp->sy == py &&
+				    wp->yoff + wp->fy >= py) ||
+				    (wp->yoff + wp->fy == py &&
 				    wp->xoff <= 1 + px &&
-				    wp->xoff + wp->sx >= px))
+				    wp->xoff + wp->fx >= px))
 					break;
 			}
 			if (wp != NULL)
@@ -1184,15 +1184,15 @@ server_client_resize_force(struct window_pane *wp)
 		return (0);
 	}
 
-	if (wp->sx != wp->osx ||
-	    wp->sy != wp->osy ||
-	    wp->sx <= 1 ||
-	    wp->sy <= 1)
+	if (wp->ex != wp->osx ||
+	    wp->ey != wp->osy ||
+	    wp->ex <= 1 ||
+	    wp->ey <= 1)
 		return (0);
 
 	memset(&ws, 0, sizeof ws);
-	ws.ws_col = wp->sx;
-	ws.ws_row = wp->sy - 1;
+	ws.ws_col = wp->ex;
+	ws.ws_row = wp->ey - 1;
 	if (wp->fd != -1 && ioctl(wp->fd, TIOCSWINSZ, &ws) == -1)
 #ifdef __sun
 		if (errno != EINVAL && errno != ENXIO)
@@ -1220,8 +1220,8 @@ server_client_resize_event(__unused int fd, __unused short events, void *data)
 		return;
 
 	memset(&ws, 0, sizeof ws);
-	ws.ws_col = wp->sx;
-	ws.ws_row = wp->sy;
+	ws.ws_col = wp->ex;
+	ws.ws_row = wp->ey;
 	if (wp->fd != -1 && ioctl(wp->fd, TIOCSWINSZ, &ws) == -1)
 #ifdef __sun
 		/*
@@ -1233,12 +1233,12 @@ server_client_resize_event(__unused int fd, __unused short events, void *data)
 		if (errno != EINVAL && errno != ENXIO)
 #endif
 		fatal("ioctl failed");
-	log_debug("%s: %%%u resize to %u,%u", __func__, wp->id, wp->sx, wp->sy);
+	log_debug("%s: %%%u resize to %u,%u", __func__, wp->id, wp->ex, wp->ey);
 
 	wp->flags &= ~PANE_RESIZE;
 
-	wp->osx = wp->sx;
-	wp->osy = wp->sy;
+	wp->osx = wp->ex;
+	wp->osy = wp->ey;
 }
 
 /* Check if pane should be resized. */
@@ -1249,7 +1249,7 @@ server_client_check_resize(struct window_pane *wp)
 
 	if (!(wp->flags & PANE_RESIZE))
 		return;
-	log_debug("%s: %%%u resize to %u,%u", __func__, wp->id, wp->sx, wp->sy);
+	log_debug("%s: %%%u resize to %u,%u", __func__, wp->id, wp->ex, wp->ey);
 
 	if (!event_initialized(&wp->resize_timer))
 		evtimer_set(&wp->resize_timer, server_client_resize_event, wp);

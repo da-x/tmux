@@ -1528,8 +1528,8 @@ format_defaults_pane(struct format_tree *ft, struct window_pane *wp)
 		fatalx("index not found");
 	format_add(ft, "pane_index", "%u", idx);
 
-	format_add(ft, "pane_width", "%u", wp->sx);
-	format_add(ft, "pane_height", "%u", wp->sy);
+	format_add(ft, "pane_width", "%u", wp->ex);
+	format_add(ft, "pane_height", "%u", wp->ey);
 	format_add(ft, "pane_title", "%s", wp->base.title);
 	format_add(ft, "pane_id", "%%%u", wp->id);
 	format_add(ft, "pane_active", "%d", wp == w->active);
@@ -1542,12 +1542,12 @@ format_defaults_pane(struct format_tree *ft, struct window_pane *wp)
 
 	format_add(ft, "pane_left", "%u", wp->xoff);
 	format_add(ft, "pane_top", "%u", wp->yoff);
-	format_add(ft, "pane_right", "%u", wp->xoff + wp->sx - 1);
-	format_add(ft, "pane_bottom", "%u", wp->yoff + wp->sy - 1);
+	format_add(ft, "pane_right", "%u", wp->xoff + wp->ex - 1);
+	format_add(ft, "pane_bottom", "%u", wp->yoff + wp->ey - 1);
 	format_add(ft, "pane_at_left", "%d", wp->xoff == 0);
 	format_add(ft, "pane_at_top", "%d", wp->yoff == 0);
-	format_add(ft, "pane_at_right", "%d", wp->xoff + wp->sx == w->sx);
-	format_add(ft, "pane_at_bottom", "%d", wp->yoff + wp->sy == w->sy);
+	format_add(ft, "pane_at_right", "%d", wp->xoff + wp->fx == w->sx);
+	format_add(ft, "pane_at_bottom", "%d", wp->yoff + wp->fy == w->sy);
 
 	format_add(ft, "pane_in_mode", "%d", wp->screen != &wp->base);
 	if (wp->mode != NULL)

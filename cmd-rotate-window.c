@@ -48,7 +48,7 @@ cmd_rotate_window_exec(struct cmd *self, struct cmdq_item *item)
 	struct window		*w = wl->window;
 	struct window_pane	*wp, *wp2;
 	struct layout_cell	*lc;
-	u_int			 sx, sy, xoff, yoff;
+	u_int			 ex, ey, xoff, yoff;
 
 	server_unzoom_window(w);
 
@@ -59,7 +59,7 @@ cmd_rotate_window_exec(struct cmd *self, struct cmdq_item *item)
 
 		lc = wp->layout_cell;
 		xoff = wp->xoff; yoff = wp->yoff;
-		sx = wp->sx; sy = wp->sy;
+		ex = wp->ex; ey = wp->ey;
 		TAILQ_FOREACH(wp, &w->panes, entry) {
 			if ((wp2 = TAILQ_NEXT(wp, entry)) == NULL)
 				break;
@@ -67,13 +67,13 @@ cmd_rotate_window_exec(struct cmd *self, struct cmdq_item *item)
 			if (wp->layout_cell != NULL)
 				wp->layout_cell->wp = wp;
 			wp->xoff = wp2->xoff; wp->yoff = wp2->yoff;
-			window_pane_resize(wp, wp2->sx, wp2->sy);
+			window_pane_resize(wp, wp2->ex, wp2->ey);
 		}
 		wp->layout_cell = lc;
 		if (wp->layout_cell != NULL)
 			wp->layout_cell->wp = wp;
 		wp->xoff = xoff; wp->yoff = yoff;
-		window_pane_resize(wp, sx, sy);
+		window_pane_resize(wp, ex, ey);
 
 		if ((wp = TAILQ_PREV(w->active, window_panes, entry)) == NULL)
 			wp = TAILQ_LAST(&w->panes, window_panes);
@@ -87,7 +87,7 @@ cmd_rotate_window_exec(struct cmd *self, struct cmdq_item *item)
 
 		lc = wp->layout_cell;
 		xoff = wp->xoff; yoff = wp->yoff;
-		sx = wp->sx; sy = wp->sy;
+		ex = wp->ex; ey = wp->ey;
 		TAILQ_FOREACH_REVERSE(wp, &w->panes, window_panes, entry) {
 			if ((wp2 = TAILQ_PREV(wp, window_panes, entry)) == NULL)
 				break;
@@ -95,13 +95,13 @@ cmd_rotate_window_exec(struct cmd *self, struct cmdq_item *item)
 			if (wp->layout_cell != NULL)
 				wp->layout_cell->wp = wp;
 			wp->xoff = wp2->xoff; wp->yoff = wp2->yoff;
-			window_pane_resize(wp, wp2->sx, wp2->sy);
+			window_pane_resize(wp, wp2->ex, wp2->ey);
 		}
 		wp->layout_cell = lc;
 		if (wp->layout_cell != NULL)
 			wp->layout_cell->wp = wp;
 		wp->xoff = xoff; wp->yoff = yoff;
-		window_pane_resize(wp, sx, sy);
+		window_pane_resize(wp, ex, ey);
 
 		if ((wp = TAILQ_NEXT(w->active, entry)) == NULL)
 			wp = TAILQ_FIRST(&w->panes);

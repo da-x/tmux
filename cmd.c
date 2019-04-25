@@ -493,9 +493,10 @@ cmd_mouse_at(struct window_pane *wp, struct mouse_event *m, u_int *xp,
 	else if (m->statusat > 0 && y >= (u_int)m->statusat)
 		y = m->statusat - 1;
 
-	if (x < wp->xoff || x >= wp->xoff + wp->sx)
+	// (DA) FIXME
+	if (x < wp->xoff || x >= wp->xoff + wp->ex)
 		return (-1);
-	if (y < wp->yoff || y >= wp->yoff + wp->sy)
+	if (y < wp->yoff || y >= wp->yoff + wp->ey)
 		return (-1);
 
 	if (xp != NULL)

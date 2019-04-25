@@ -113,9 +113,9 @@ cmd_split_window_exec(struct cmd *self, struct cmdq_item *item)
 			goto error;
 		}
 		if (type == LAYOUT_TOPBOTTOM)
-			size = (wp->sy * percentage) / 100;
+			size = (wp->ey * percentage) / 100;
 		else
-			size = (wp->sx * percentage) / 100;
+			size = (wp->ex * percentage) / 100;
 	}
 	hlimit = options_get_number(s->options, "history-limit");
 

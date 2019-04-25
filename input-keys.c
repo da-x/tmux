@@ -151,6 +151,13 @@ input_split2(u_int c, u_char *dst)
 	return (1);
 }
 
+static void
+cell_size_change(struct window_pane *wp, int change)
+{
+	window_pane_cell_size_update(wp, change);
+	server_redraw_window(wp->window);
+}
+
 /* Translate a key code into an output key sequence. */
 void
 input_key(struct window_pane *wp, key_code key, struct mouse_event *m)
@@ -164,6 +171,14 @@ input_key(struct window_pane *wp, key_code key, struct mouse_event *m)
 
 	log_debug("writing key 0x%llx (%s) to %%%u", key,
 	    key_string_lookup_key(key), wp->id);
+
+	if (key == KEYC_PANE_FONT_DECREASE) {
+		cell_size_change(wp, -1);
+		return;
+	} else if (key == KEYC_PANE_FONT_INCREASE) {
+		cell_size_change(wp, 1);
+		return;
+	}
 
 	/* If this is a mouse key, pass off to mouse function. */
 	if (KEYC_IS_MOUSE(key)) {

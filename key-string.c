@@ -279,6 +279,10 @@ key_string_lookup_key(key_code key)
 		return ("MouseMoveStatusRight");
 	if (key == KEYC_MOUSEMOVE_BORDER)
 		return ("MouseMoveBorder");
+	if (key == KEYC_PANE_FONT_DECREASE)
+		return ("PaneFontDecrease");
+	if (key == KEYC_PANE_FONT_INCREASE)
+		return ("PaneFontIncrease");
 	if (key >= KEYC_USER && key < KEYC_USER + KEYC_NUSER) {
 		snprintf(out, sizeof out, "User%u", (u_int)(key - KEYC_USER));
 		return (out);
