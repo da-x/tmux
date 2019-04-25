@@ -119,9 +119,9 @@ cmd_join_pane_exec(struct cmd *self, struct cmdq_item *item)
 			return (CMD_RETURN_ERROR);
 		}
 		if (type == LAYOUT_TOPBOTTOM)
-			size = (dst_wp->sy * percentage) / 100;
+			size = (dst_wp->ey * percentage) / 100;
 		else
-			size = (dst_wp->sx * percentage) / 100;
+			size = (dst_wp->ex * percentage) / 100;
 	}
 	lc = layout_split_pane(dst_wp, type, size, args_has(args, 'b'), 0);
 	if (lc == NULL) {

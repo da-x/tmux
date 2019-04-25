@@ -50,7 +50,7 @@ static int	tty_keys_mouse(struct tty *, const char *, size_t, size_t *);
 static int	tty_keys_clipboard(struct tty *, const char *, size_t,
 		    size_t *);
 static int	tty_keys_device_attributes(struct tty *, const char *, size_t,
-		    size_t *);
+		    size_t *, key_code *);
 
 /* Default raw keys. */
 struct tty_default_key_raw {
@@ -588,9 +588,11 @@ tty_keys_next(struct tty *tty)
 	}
 
 	/* Is this a device attributes response? */
-	switch (tty_keys_device_attributes(tty, buf, len, &size)) {
+	switch (tty_keys_device_attributes(tty, buf, len, &size, &key)) {
 	case 0:		/* yes */
 		key = KEYC_UNKNOWN;
+		goto complete_key;
+	case 2:		/* yes */
 		goto complete_key;
 	case -1:	/* no, or not valid */
 		break;
@@ -974,13 +976,50 @@ tty_keys_clipboard(__unused struct tty *tty, const char *buf, size_t len,
 	return (0);
 }
 
+static void
+tty_parse_font_size_info(struct tty *tty, const char *buf, size_t len)
+{
+	char *pbuf = strndup(buf, len), *scan;
+	struct tty_render_size rs;
+	struct tty_render_sizes *sizes;
+
+	if (!pbuf) {
+		fatalx("unable to allocate buffer\n");
+		return;
+	}
+
+	scan = pbuf;
+	sizes = &tty->sizes;
+
+	if (sscanf(scan, "%f", &sizes->current_size) != 1) {
+		free(pbuf);
+		return;
+	}
+
+	sizes->nr_entries = 0;
+	do {
+		scan = strchr(scan, ':');
+		if (!scan)
+			break;
+
+		scan++;
+		if (sscanf(scan, "%f/%d/%d", &rs.size, &rs.x, &rs.y) != 3)
+			break;
+
+		sizes->entries[sizes->nr_entries] = rs;
+		sizes->nr_entries++;
+	} while (1);
+
+	free(pbuf);
+}
+
 /*
  * Handle device attributes input. Returns 0 for success, -1 for failure, 1 for
  * partial.
  */
 static int
 tty_keys_device_attributes(struct tty *tty, const char *buf, size_t len,
-    size_t *size)
+    size_t *size, key_code *out_key)
 {
 	struct client		*c = tty->client;
 	u_int			 i, a, b;
@@ -1003,6 +1042,35 @@ tty_keys_device_attributes(struct tty *tty, const char *buf, size_t len,
 		return (-1);
 	if (len == 3)
 		return (1);
+	if (buf[3] == 'z') {
+		if (len == 4)
+			return (1);
+		switch (buf[4]) {
+		case '-': {
+			char *p = memchr(&buf[5], '?', len - 5);
+			if (p == NULL) {
+				return 1;
+			} else {
+				*size = p - &buf[0] + 1;
+				tty_parse_font_size_info(tty, &buf[5], len - 5);
+				log_debug("%s: got terminal font "
+					  "info in %zd bytes", __func__,
+					  *size);
+				return 0;
+			}
+		}
+		case '0': {
+			*out_key = KEYC_PANE_FONT_DECREASE;
+			*size = 5;
+			return (2);
+		}
+		case '1': {
+			*out_key = KEYC_PANE_FONT_INCREASE;
+			*size = 5;
+			return (2);
+		}
+		}
+	}
 
 	/* Copy the rest up to a 'c'. */
 	for (i = 0; i < (sizeof tmp) - 1 && buf[3 + i] != 'c'; i++) {

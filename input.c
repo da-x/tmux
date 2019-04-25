@@ -1765,7 +1765,7 @@ input_csi_dispatch_winops(struct input_ctx *ictx)
 			}
 			break;
 		case 18:
-			input_reply(ictx, "\033[8;%u;%ut", wp->sy, wp->sx);
+			input_reply(ictx, "\033[8;%u;%ut", wp->ey, wp->ex);
 			break;
 		default:
 			log_debug("%s: unknown '%c'", __func__, ictx->ch);

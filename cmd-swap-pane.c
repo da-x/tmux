@@ -92,10 +92,10 @@ cmd_swap_pane_exec(struct cmd *self, struct cmdq_item *item)
 	src_wp->window = dst_w;
 	dst_wp->window = src_w;
 
-	sx = src_wp->sx; sy = src_wp->sy;
+	sx = src_wp->ex; sy = src_wp->ey;
 	xoff = src_wp->xoff; yoff = src_wp->yoff;
 	src_wp->xoff = dst_wp->xoff; src_wp->yoff = dst_wp->yoff;
-	window_pane_resize(src_wp, dst_wp->sx, dst_wp->sy);
+	window_pane_resize(src_wp, dst_wp->ex, dst_wp->ey);
 	dst_wp->xoff = xoff; dst_wp->yoff = yoff;
 	window_pane_resize(dst_wp, sx, sy);
 

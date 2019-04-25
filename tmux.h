@@ -183,6 +183,10 @@ enum {
 	/* Backspace key. */
 	KEYC_BSPACE,
 
+	/* Pane font zoom */
+	KEYC_PANE_FONT_INCREASE,
+	KEYC_PANE_FONT_DECREASE,
+
 	/* Function keys. */
 	KEYC_F1,
 	KEYC_F2,
@@ -722,8 +726,13 @@ struct window_pane {
 	struct layout_cell *layout_cell;
 	struct layout_cell *saved_layout_cell;
 
-	u_int		 sx;
-	u_int		 sy;
+	int              cell_size_diff;
+
+	u_int		 ex;
+	u_int		 ey;
+
+	u_int		 fx;
+	u_int		 fy;
 
 	u_int		 osx;
 	u_int		 osy;
@@ -1025,6 +1034,19 @@ struct tty_term {
 };
 LIST_HEAD(tty_terms, tty_term);
 
+struct tty_render_size {
+	float size;
+	int x, y;
+};
+
+#define TTY_RENDER_SIZE__MAX_SIZES 0x100
+
+struct tty_render_sizes {
+	float current_size;
+	int nr_entries;
+	struct tty_render_size entries[TTY_RENDER_SIZE__MAX_SIZES];
+};
+
 struct tty {
 	struct client	*client;
 
@@ -1041,6 +1063,8 @@ struct tty {
 	u_int		 ooy;
 	u_int		 osx;
 	u_int		 osy;
+
+	struct tty_render_sizes sizes;
 
 	int		 mode;
 
@@ -2183,6 +2207,7 @@ int		 window_pane_destroy_ready(struct window_pane *);
 int		 window_pane_spawn(struct window_pane *, int, char **,
 		     const char *, const char *, const char *, struct environ *,
 		     struct termios *, char **);
+void		 window_pane_cell_size_update(struct window_pane *, int change);
 void		 window_pane_resize(struct window_pane *, u_int, u_int);
 void		 window_pane_alternate_on(struct window_pane *,
 		     struct grid_cell *, int);

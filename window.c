@@ -503,9 +503,9 @@ window_get_active_at(struct window *w, u_int x, u_int y)
 	TAILQ_FOREACH(wp, &w->panes, entry) {
                 if (!window_pane_visible(wp))
                         continue;
-		if (x < wp->xoff || x > wp->xoff + wp->sx)
+		if (x < wp->xoff || x > wp->xoff + wp->fx)
 			continue;
-		if (y < wp->yoff || y > wp->yoff + wp->sy)
+		if (y < wp->yoff || y > wp->yoff + wp->fy)
 			continue;
 		return (wp);
 	}
@@ -816,8 +816,10 @@ window_pane_create(struct window *w, u_int sx, u_int sy, u_int hlimit)
 	wp->xoff = 0;
 	wp->yoff = 0;
 
-	wp->sx = wp->osx = sx;
-	wp->sy = wp->osx = sy;
+	wp->cell_size_diff = 0;
+
+	wp->ex = wp->fx = wp->osx = sx;
+	wp->ex = wp->fy = wp->osx = sy;
 
 	wp->pipe_fd = -1;
 	wp->pipe_off = 0;
@@ -1058,19 +1060,101 @@ window_pane_error_callback(__unused struct bufferevent *bufev,
 		server_destroy_pane(wp, 1);
 }
 
+static void
+window_pane_update_effective(struct client *c, struct window_pane *wp, int target)
+{
+	struct tty_render_sizes *sizes;
+	int i, entry = -1;
+
+	sizes = &c->tty.sizes;
+	for (i = 0; i < sizes->nr_entries; i++) {
+		if (sizes->current_size == sizes->entries[i].size) {
+			entry = i;
+			break;
+		}
+	}
+
+	if (entry == -1) {
+		/* Probaby went out of bounds - no changes */
+		target = wp->cell_size_diff;
+	} else {
+		if (target < 0) {
+			/* Only alow to enlarge font */
+			target = 0;
+		}
+
+		if (entry + target < 0)
+			target = -entry;
+		if (entry + target >= sizes->nr_entries)
+			target = sizes->nr_entries - 1 - entry;
+	}
+
+	if (target == 0) {
+		wp->ex = wp->fx;
+		wp->ey = wp->fy;
+	} else {
+		struct tty_render_size *current = &sizes->entries[entry];
+		struct tty_render_size *dest = &sizes->entries[entry + target];
+		int px = wp->fx * current->x;
+		int py = wp->fy * current->y;
+		int nx = px / dest->x;
+		int ny = py / dest->y;
+
+		log_debug("%s: %d %d: (%d, %d) -> (%d, %d)\n",
+			  __func__, entry, entry + target,
+			  wp->fx, wp->fy, nx, ny);
+
+		wp->ex = nx;
+		wp->ey = ny;
+	}
+
+	wp->cell_size_diff = target;
+}
+
 void
 window_pane_resize(struct window_pane *wp, u_int sx, u_int sy)
 {
-	if (sx == wp->sx && sy == wp->sy)
+	if (sx == wp->fx && sy == wp->fy)
 		return;
-	wp->sx = sx;
-	wp->sy = sy;
 
-	screen_resize(&wp->base, sx, sy, wp->saved_grid == NULL);
+	wp->fx = sx;
+	wp->fy = sy;
+	wp->ex = sx;
+	wp->ey = sy;
+
+	window_pane_cell_size_update(wp, 0);
+
+	screen_resize(&wp->base, wp->ex, wp->ey, wp->saved_grid == NULL);
 	if (wp->mode != NULL)
-		wp->mode->resize(wp, sx, sy);
+		wp->mode->resize(wp, wp->ex, wp->ey);
 
 	wp->flags |= PANE_RESIZE;
+}
+
+void
+window_pane_cell_size_update(struct window_pane *wp, int change)
+{
+	struct client	*c, *single_client = NULL;
+	struct screen	*s = &wp->base;
+	u_int prev_ex = wp->ex, prev_ey = wp->ey;
+
+	TAILQ_FOREACH(c, &clients, entry) {
+		if (c->tty.sizes.nr_entries == 0)
+			return;
+
+		if (single_client != NULL)
+			return;
+
+		single_client = c;
+	}
+
+	window_pane_update_effective(single_client, wp,
+				     wp->cell_size_diff + change);
+
+	if (prev_ex != wp->ex || prev_ey != wp->ey) {
+		wp->flags |= PANE_RESIZE;
+		screen_resize(s, wp->ex, wp->ey, 1);
+	}
 }
 
 /*
@@ -1378,14 +1462,14 @@ window_pane_find_up(struct window_pane *wp)
 		edge = wp->window->sy + 1 - (status == 2 ? 1 : 0);
 
 	left = wp->xoff;
-	right = wp->xoff + wp->sx;
+	right = wp->xoff + wp->fx;
 
 	TAILQ_FOREACH(next, &wp->window->panes, entry) {
 		if (next == wp)
 			continue;
-		if (next->yoff + next->sy + 1 != edge)
+		if (next->yoff + next->fy + 1 != edge)
 			continue;
-		end = next->xoff + next->sx - 1;
+		end = next->xoff + next->fx - 1;
 
 		found = 0;
 		if (next->xoff < left && end > right)
@@ -1420,19 +1504,19 @@ window_pane_find_down(struct window_pane *wp)
 	list = NULL;
 	size = 0;
 
-	edge = wp->yoff + wp->sy + 1;
+	edge = wp->yoff + wp->fy + 1;
 	if (edge >= wp->window->sy - (status == 2 ? 1 : 0))
 		edge = (status == 1 ? 1 : 0);
 
 	left = wp->xoff;
-	right = wp->xoff + wp->sx;
+	right = wp->xoff + wp->fx;
 
 	TAILQ_FOREACH(next, &wp->window->panes, entry) {
 		if (next == wp)
 			continue;
 		if (next->yoff != edge)
 			continue;
-		end = next->xoff + next->sx - 1;
+		end = next->xoff + next->fx - 1;
 
 		found = 0;
 		if (next->xoff < left && end > right)
@@ -1471,14 +1555,14 @@ window_pane_find_left(struct window_pane *wp)
 		edge = wp->window->sx + 1;
 
 	top = wp->yoff;
-	bottom = wp->yoff + wp->sy;
+	bottom = wp->yoff + wp->fy;
 
 	TAILQ_FOREACH(next, &wp->window->panes, entry) {
 		if (next == wp)
 			continue;
-		if (next->xoff + next->sx + 1 != edge)
+		if (next->xoff + next->fx + 1 != edge)
 			continue;
-		end = next->yoff + next->sy - 1;
+		end = next->yoff + next->fy - 1;
 
 		found = 0;
 		if (next->yoff < top && end > bottom)
@@ -1512,19 +1596,19 @@ window_pane_find_right(struct window_pane *wp)
 	list = NULL;
 	size = 0;
 
-	edge = wp->xoff + wp->sx + 1;
+	edge = wp->xoff + wp->fx + 1;
 	if (edge >= wp->window->sx)
 		edge = 0;
 
 	top = wp->yoff;
-	bottom = wp->yoff + wp->sy;
+	bottom = wp->yoff + wp->fy;
 
 	TAILQ_FOREACH(next, &wp->window->panes, entry) {
 		if (next == wp)
 			continue;
 		if (next->xoff != edge)
 			continue;
-		end = next->yoff + next->sy - 1;
+		end = next->yoff + next->ey - 1;
 
 		found = 0;
 		if (next->yoff < top && end > bottom)
