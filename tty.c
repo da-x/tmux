@@ -1211,6 +1211,12 @@ tty_draw_line(struct tty *tty, const struct window_pane *wp,
 	log_debug("%s: px=%u py=%u nx=%u atx=%u aty=%u", __func__,
 	    px, py, nx, atx, aty);
 
+	if (gd->sy <= py) {
+		log_debug("%s: gd is over effective y: %u", __func__,
+			  gd->sy);
+		return;
+	}
+
 	/*
 	 * py is the line in the screen to draw.
 	 * px is the start x and nx is the width to draw.
