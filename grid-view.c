@@ -125,12 +125,17 @@ grid_view_scroll_region_up(struct grid *gd, u_int rupper, u_int rlower,
 /* Scroll region down. */
 void
 grid_view_scroll_region_down(struct grid *gd, u_int rupper, u_int rlower,
-    u_int bg)
+    u_int bg, u_int extended)
 {
-	rupper = grid_view_y(gd, rupper);
-	rlower = grid_view_y(gd, rlower);
+	if ((gd->flags & GRID_HISTORY) && extended == 1 && rupper == 0) {
+		rlower = grid_view_y(gd, rlower);
+		grid_unscroll_history_region(gd, rlower, bg);
+	} else {
+		rupper = grid_view_y(gd, rupper);
+		rlower = grid_view_y(gd, rlower);
 
-	grid_move_lines(gd, rupper + 1, rupper, rlower - rupper, bg);
+		grid_move_lines(gd, rupper + 1, rupper, rlower - rupper, bg);
+	}
 }
 
 /* Insert lines. */

@@ -448,6 +448,31 @@ grid_scroll_history_region(struct grid *gd, u_int upper, u_int lower, u_int bg)
 	gd->hsize++;
 }
 
+/* Scroll a region down, moving one line from the history into the screen. */
+void
+grid_unscroll_history_region(struct grid *gd, u_int lower, u_int bg)
+{
+	struct grid_line	*gl_removed_line;
+	u_int			 yy = gd->hsize + gd->sy;
+
+	if (gd->hsize == 0)
+		return;
+
+	/* Free the line and shift all lines following up back up */
+	grid_free_line(gd, lower);
+	gl_removed_line = &gd->linedata[lower];
+	memmove(gl_removed_line, gl_removed_line + 1, (yy - (lower + 1))
+		* sizeof *gl_removed_line);
+
+	/* Trim the line from the array holding all line data */
+	gd->linedata = xreallocarray(gd->linedata, yy - 1,
+	    sizeof *gd->linedata);
+
+	/* Adjust history size and scrolled region */
+	gd->hscrolled--;
+	gd->hsize--;
+}
+
 /* Expand line to fit to cell. */
 static void
 grid_expand_line(struct grid *gd, u_int py, u_int sx, u_int bg)

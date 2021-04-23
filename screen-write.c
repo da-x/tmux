@@ -1220,7 +1220,7 @@ screen_write_reverseindex(struct screen_write_ctx *ctx, u_int bg)
 	struct tty_ctx	 ttyctx;
 
 	if (s->cy == s->rupper) {
-		grid_view_scroll_region_down(s->grid, s->rupper, s->rlower, bg);
+		grid_view_scroll_region_down(s->grid, s->rupper, s->rlower, bg, 0);
 		screen_write_collect_flush(ctx, 0, __func__);
 
 		screen_write_initctx(ctx, &ttyctx, 1);
@@ -1310,7 +1310,8 @@ screen_write_scrollup(struct screen_write_ctx *ctx, u_int lines, u_int bg)
 
 /* Scroll down. */
 void
-screen_write_scrolldown(struct screen_write_ctx *ctx, u_int lines, u_int bg)
+screen_write_scrolldown(struct screen_write_ctx *ctx, u_int lines, u_int bg,
+	u_int extended)
 {
 	struct screen	*s = ctx->s;
 	struct grid	*gd = s->grid;
@@ -1326,11 +1327,16 @@ screen_write_scrolldown(struct screen_write_ctx *ctx, u_int lines, u_int bg)
 		lines = s->rlower - s->rupper + 1;
 
 	for (i = 0; i < lines; i++)
-		grid_view_scroll_region_down(gd, s->rupper, s->rlower, bg);
+		grid_view_scroll_region_down(gd, s->rupper, s->rlower, bg,
+			extended);
 
-	screen_write_collect_flush(ctx, 0, __func__);
-	ttyctx.num = lines;
-	tty_write(tty_cmd_scrolldown, &ttyctx);
+	if (extended)
+		ttyctx.redraw_cb(&ttyctx);
+	else {
+		screen_write_collect_flush(ctx, 0, __func__);
+		ttyctx.num = lines;
+		tty_write(tty_cmd_scrolldown, &ttyctx);
+	}
 }
 
 /* Carriage return (cursor to start of line). */

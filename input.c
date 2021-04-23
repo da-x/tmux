@@ -1333,6 +1333,14 @@ input_csi_dispatch(struct input_ctx *ictx)
 	struct input_table_entry       *entry;
 	int				i, n, m;
 	u_int				cx, bg = ictx->cell.cell.bg;
+	int				extended = 0;
+
+	if (ictx->interm_len > 0 && ictx->interm_buf[0] == '+') {
+		memmove(&ictx->interm_buf[0], &ictx->interm_buf[1],
+			ictx->interm_len);
+		ictx->interm_len -= 1;
+		extended = 1;
+	}
 
 	if (ictx->flags & INPUT_DISCARD)
 		return (0);
@@ -1589,7 +1597,7 @@ input_csi_dispatch(struct input_ctx *ictx)
 	case INPUT_CSI_SD:
 		n = input_get(ictx, 0, 1, 1);
 		if (n != -1)
-			screen_write_scrolldown(sctx, n, bg);
+			screen_write_scrolldown(sctx, n, bg, extended);
 		break;
 	case INPUT_CSI_TBC:
 		switch (input_get(ictx, 0, 0, 0)) {
