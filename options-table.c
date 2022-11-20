@@ -1424,6 +1424,12 @@ const struct options_table_entry options_table[] = {
 		  "client and 'manual' a size set by the 'resize-window' "
 		  "command."
 	},
+	{ .name = "update-environment-on-activity",
+	  .type = OPTIONS_TABLE_FLAG,
+	  .scope = OPTIONS_TABLE_SESSION,
+	  .default_num = 0,
+	  .text = "Control whether environment of a session is auto-updated on activity."
+	},
 
 	{ .name = "window-style",
 	  .type = OPTIONS_TABLE_STRING,

@@ -2310,6 +2310,11 @@ server_client_update_latest(struct client *c)
 		recalculate_size(w, 0);
 
 	notify_client("client-active", c);
+
+	if (options_get_number(c->session->options, "update-environment-on-activity"))
+		environ_update(c->session->options,
+			       c->environ,
+			       c->session->environ);
 }
 
 /* Get repeat time. */
