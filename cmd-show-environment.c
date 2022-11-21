@@ -38,12 +38,12 @@ const struct cmd_entry cmd_show_environment_entry = {
 	.name = "show-environment",
 	.alias = "showenv",
 
-	.args = { "hgst:", 0, 1 },
-	.usage = "[-hgs] " CMD_TARGET_SESSION_USAGE " [name]",
+	.args = { "hgst:c:", 0, 1 },
+	.usage = "[-hgs] " CMD_TARGET_SESSION_USAGE " [-c target-client] [name]",
 
 	.target = { 't', CMD_FIND_SESSION, CMD_FIND_CANFAIL },
 
-	.flags = CMD_AFTERHOOK,
+	.flags = CMD_AFTERHOOK | CMD_CLIENT_CFLAG | CMD_CLIENT_CANFAIL,
 	.exec = cmd_show_environment_exec
 };
 
@@ -99,9 +99,14 @@ cmd_show_environment_exec(struct cmd *self, struct cmdq_item *item)
 {
 	struct args		*args = cmd_get_args(self);
 	struct cmd_find_state	*target = cmdq_get_target(item);
+	struct client		*c = NULL;
 	struct environ		*env;
 	struct environ_entry	*envent;
 	const char		*tflag;
+	const char		*cflag;
+	struct options_entry	*o;
+	struct options_array_item *a;
+	union options_value	*ov;
 
 	if ((tflag = args_get(args, 't')) != NULL) {
 		if (target->s == NULL) {
@@ -109,6 +114,9 @@ cmd_show_environment_exec(struct cmd *self, struct cmdq_item *item)
 			return (CMD_RETURN_ERROR);
 		}
 	}
+
+	if ((cflag = args_get(args, 'c')) != NULL)
+		c = cmd_find_client(item, cflag, 1);
 
 	if (args_has(args, 'g'))
 		env = global_environ;
@@ -122,6 +130,23 @@ cmd_show_environment_exec(struct cmd *self, struct cmdq_item *item)
 			return (CMD_RETURN_ERROR);
 		}
 		env = target->s->environ;
+	}
+
+	if (c) {
+		env = c->environ;
+		o = options_get(c->session->options, "update-environment");
+		if (o != NULL) {
+			a = options_array_first(o);
+			while (a != NULL) {
+				ov = options_array_item_value(a);
+
+				envent = environ_find(env, ov->string);
+				if (envent != NULL)
+					cmd_show_environment_print(self, item, envent);
+				a = options_array_next(a);
+			}
+		}
+		return (CMD_RETURN_NORMAL);
 	}
 
 	if (args->argc != 0) {
