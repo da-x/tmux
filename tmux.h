@@ -961,6 +961,7 @@ struct window_pane {
 #define PANE_EMPTY 0x800
 #define PANE_STYLECHANGED 0x1000
 #define PANE_RESIZENOW 0x2000
+#define PANE_UNSEEN_CHANGES 0x4000
 
 	int		 argc;
 	char	       **argv;
