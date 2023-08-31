@@ -3547,6 +3547,8 @@ int		 utf8_cstrhas(const char *, const struct utf8_data *);
 char		*osdep_get_name(int, char *);
 char		*osdep_get_cwd(int);
 struct event_base *osdep_event_init(void);
+int		osdep_get_pgrp(int fd);
+
 
 /* utf8-combined.c */
 int		 utf8_has_zwj(const struct utf8_data *);

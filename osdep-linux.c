@@ -60,6 +60,12 @@ osdep_get_name(int fd, __unused char *tty)
 	return (buf);
 }
 
+int
+osdep_get_pgrp(int fd)
+{
+	return tcgetpgrp(fd);
+}
+
 char *
 osdep_get_cwd(int fd)
 {
