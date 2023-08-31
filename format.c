@@ -823,6 +823,20 @@ format_cb_current_command(struct format_tree *ft)
 	return (value);
 }
 
+/* Callback for pane_current_command. */
+static void *
+format_cb_current_pgrp(struct format_tree *ft)
+{
+	struct window_pane	*wp = ft->wp;
+	char			*value;
+
+	if (wp == NULL || wp->shell == NULL)
+		return (NULL);
+
+	xasprintf(&value, "%zu", osdep_get_pgrp(wp->fd));
+	return (value);
+}
+
 /* Callback for pane_current_path. */
 static void *
 format_cb_current_path(struct format_tree *ft)
@@ -2731,6 +2745,9 @@ static const struct format_table_entry format_table[] = {
 	},
 	{ "pane_current_path", FORMAT_TABLE_STRING,
 	  format_cb_current_path
+	},
+	{ "pane_current_pgrp", FORMAT_TABLE_STRING,
+	  format_cb_current_pgrp
 	},
 	{ "pane_dead", FORMAT_TABLE_STRING,
 	  format_cb_pane_dead
