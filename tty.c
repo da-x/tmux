@@ -645,7 +645,7 @@ tty_add(struct tty *tty, const char *buf, size_t len)
 void
 tty_puts(struct tty *tty, const char *s)
 {
-	if (*s != '\0')
+	if (s != NULL && *s != '\0')
 		tty_add(tty, s, strlen(s));
 }
 
